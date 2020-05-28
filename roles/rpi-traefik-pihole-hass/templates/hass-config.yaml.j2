@@ -1,0 +1,45 @@
+---
+# Configure a default setup of Home Assistant (frontend, api, etc)
+default_config:
+
+# Text to speech
+tts:
+  - platform: google_translate
+
+group: !include groups.yaml
+automation: !include automations.yaml
+script: !include scripts.yaml
+scene: !include scenes.yaml
+
+samsungtv:
+  - host: 10.10.10.142
+
+hue:
+  bridges:
+    - host: 10.10.10.146
+
+media_player:
+  - platform: soundtouch
+    host: 10.10.10.110
+    port: 8090
+    name: Soundtouch Living Room
+  - platform: soundtouch
+    host: 10.10.10.143
+    port: 8090
+    name: Soundtouch Kicsi Room
+
+homeassistant:
+  auth_providers:
+    - type: trusted_networks
+      trusted_networks:
+        - 10.0.0.0/8
+      allow_bypass_login: true
+    - type: homeassistant
+
+device_tracker:
+  - platform: ddwrt
+    host: 10.10.10.254
+    username: {{ ddwrt_admin_username | default(omit) }}
+    password: {{ ddwrt_admin_password | default(omit) }}
+
+prometheus:

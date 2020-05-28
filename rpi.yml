@@ -1,0 +1,28 @@
+---
+- hosts: rpi
+  vars:
+    traefik_container_version: "v2.2.1"
+    pihole_container_version: "v5.0"
+    pihole_admin_password: test
+    pihole_conditional_forwarding: "true"
+    pihole_conditional_forwarding_ip: "10.10.10.254" #Your router IP
+    pihole_conditional_forwarding_domain: "local" #Local network domain
+    home_assistant_container_version: "0.110.3"
+    prometheus_node_exporter_version: 1.0.0
+    zerotier_network_id: "{{ vault_zerotier_network }}"
+  roles:
+    - role: m4rcu5nl.zerotier-one
+      name: Setup Zerotier Network
+      zerotier_register_short_hostname: true
+      zerotier_api_accesstoken: "{{ vault_zerotier_accesstoken }}"
+    - role: undergreen.prometheus-node-exporter
+      prometheus_node_exporter_release_name: "node_exporter-{{ prometheus_node_exporter_version }}.linux-armv7"
+    - role: geerlingguy.docker
+      name: Install Docker
+      docker_package_state: latest
+      docker_users: ['pi']
+      docker_apt_repository: "deb [arch=armhf] https://download.docker.com/linux/{{ ansible_distribution | lower }} {{ ansible_distribution_release }} {{ docker_apt_release_channel }}"
+    - role: rpi-traefik-pihole-hass
+
+  # tasks:
+  #   - debug: var=ansible_user_id

@@ -1,0 +1,88 @@
+- name: Enable docker metrics # Docs https://docs.docker.com/config/daemon/prometheus/#configure-docker
+  copy:
+    src: files/docker-daemon.json
+    dest: /etc/docker/daemon.json
+  notify:
+    - restart docker
+
+- name: Ensure traefik container is running
+  become: yes
+  docker_container:
+    name: traefik
+    image: "traefik:{{ traefik_container_version}}"
+    state: started
+    restart: no
+    restart_policy: on-failure
+    labels:
+      traefik.http.routers.api.rule: Host(`traefik`) || Host(`{{ ansible_all_ipv4_addresses[1] }}`)
+      traefik.http.routers.api.service: api@internal
+    ports:
+    - '80:80/tcp' #web interface
+    command: --providers.docker=true --api=true --entrypoints.web.address=:80 --entrypoints.web-secure.address=:443 --metrics.prometheus=true --accesslog=true
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+
+- name: Ensure pihole docker container is running
+  become: yes
+  docker_container:
+    name: pihole
+    image: "pihole/pihole:{{ pihole_container_version }}"
+    state: started
+    restart: no
+    restart_policy: on-failure
+    labels:
+      traefik.http.routers.pihole.rule: Host(`pihole`) || Host(`{{ ansible_all_ipv4_addresses[0] }}`)
+      traefik.http.services.pihole.loadbalancer.server.port: "80"
+      traefik.http.routers.pihole.service: pihole@docker
+    ports:
+    - '53:53/udp' #dns
+    - '53:53/tcp' #dns
+    volumes:
+    - ./etc-pihole/:/etc/pihole/
+    - ./etc-dnsmasq.d/:/etc/dnsmasq.d/
+    env:
+      DNS1: '127.0.0.1'
+      DNS2: '1.1.1.1'
+      WEBPASSWORD: "{{ pihole_admin_password }}"
+      ServerIP: "{{ ansible_all_ipv4_addresses[0] }}"
+      CONDITIONAL_FORWARDING: "{{ pihole_conditional_forwarding }}"
+      CONDITIONAL_FORWARDING_IP: "{{ pihole_conditional_forwarding_ip }}"
+      CONDITIONAL_FORWARDING_DOMAIN: "{{ pihole_conditional_forwarding_domain }}"
+    comparisons:
+      image: strict
+      env: strict
+      ports: strict
+      labels: strict
+
+- name: Create hass config dir
+  file:
+    path: /home/pi/hass-config
+    state: directory
+
+- name: Copy hass configuration file
+  template:
+    src: hass-config.yaml.j2
+    dest: /home/pi/hass-config/configuration.yaml
+
+- name: Ensure home-assistant container is running
+  become: yes
+  docker_container:
+    name: hass
+    image: "homeassistant/home-assistant:{{ home_assistant_container_version }}"
+    state: started
+    restart: no
+    restart_policy: on-failure
+    labels:
+      traefik.http.services.hass.loadbalancer.server.port: "8123"
+    ports:
+    - '8123/tcp' #web interface
+    - '1900/udp' #uPNP
+    - '5353/udp' #mDNS
+    volumes:
+    - /home/pi/hass-config/:/config/:rw
+    comparisons:
+      image: strict
+      env: strict
+      ports: strict
+      labels: strict
+      command: strict
